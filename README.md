@@ -107,4 +107,4 @@ This project is licensed under the MIT License. See [LICENSE](LICENSE) for detai
 ## Links
 
 - [Google Sheet Template](https://docs.google.com/spreadsheets/d/1qpASVrKa8W4SQscppcuo9j0iQWIaM2IlscuIX52MmwY/edit?usp=sharing)
-- [Video Tutorials](https://www.youtube.com/@ragdoll2154)
+- [Video Tutorials]([https://www.youtube.com/@ragdoll2154](https://www.youtube.com/watch?v=mX8JiJAYOEo&t=1s))
