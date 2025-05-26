@@ -401,4 +401,4 @@ func _on_template_link_pressed() -> void:
 
 # Add handler for tutorial link/button
 func _on_tutorial_link_pressed() -> void:
-	OS.shell_open("https://www.youtube.com/@ragdoll2154") # Replace with your actual tutorial link
+	OS.shell_open("https://www.youtube.com/watch?v=mX8JiJAYOEo") # Replace with your actual tutorial link
