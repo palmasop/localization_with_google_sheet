@@ -13,6 +13,7 @@
 # Test Template:
 #   assert(reg.process_translations_for("res://.../file.csv", "WorkspaceName"))
 
+@tool
 extends Node
 
 const CSV_BASE_DIR := "res://data/localization"

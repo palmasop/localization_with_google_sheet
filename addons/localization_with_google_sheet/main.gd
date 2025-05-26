@@ -349,13 +349,17 @@ func _show_apply_translations_dialog(csv_path: String) -> void:
 	dlg.popup_centered()
 
 func _on_apply_translations_confirmed(csv_path: String) -> void:
-	var workspace = csv_path.get_file().split("_")[-2] # crude extraction
+	var workspace = csv_path.get_file().split("_")[-2]
 	status_label.text = "Applying translations for %s…"%workspace
+
+	await _scan_filesystem() # <-- Wait for filesystem to update and .translation files to be generated
+
 	if translation_registrar.process_translations_for(csv_path, workspace):
 		status_label.text = "Registered translations for %s."%workspace
 	else:
 		status_label.text = "Failed to register translations for %s."%workspace
 		return
+
 	var fs = get_editor_interface().get_resource_filesystem()
 	if enum_generator.generate_enum_for(csv_path, workspace, plugin_dir, fs):
 		status_label.text += " Enum generated."
