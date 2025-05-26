@@ -39,8 +39,10 @@ var request_headers: Array = [
 var refresh_buttons: Array = []
 var pending_delete_idx: int = -1
 var scan_timer: Timer = null
-var scan_in_progress: bool = false
-var scan_queued: bool = false
+var scan_in_progress := false
+var scan_queued := false
+var running_queued_scan := false
+var is_refreshing_ui := false
 
 func _enter_tree() -> void:
 	plugin_dir = get_script().get_path().get_base_dir()
@@ -80,10 +82,13 @@ func _create_dialog() -> void:
 
 func _clear_entries_container() -> void:
 	for child in entries_container.get_children():
-		entries_container.remove_child(child)
 		child.queue_free()
 
 func _refresh_workspace_list_ui() -> void:
+	if is_refreshing_ui:
+		print("UI refresh already in progress, skipping")
+		return
+	is_refreshing_ui = true
 	_clear_entries_container()
 
 	# --- First row: Template and Tutorial links right-aligned ---
@@ -202,6 +207,8 @@ func _refresh_workspace_list_ui() -> void:
 
 		refresh_buttons.append(ref_btn)
 
+	is_refreshing_ui = false
+
 func _on_add_workspace() -> void:
 	workspace_manager.add_workspace("", "")
 	_refresh_workspace_list_ui()
@@ -271,10 +278,11 @@ func _on_confirm_delete_workspace() -> void:
 		fs.scan()
 		fs.update_file(gd_enum_path)
 		fs.update_file(cs_enum_path)
-		await _scan_filesystem()
-		call_deferred("_refresh_workspace_list_ui")
-		call_deferred("_show_delete_success_popup")
-		_touch_parent_dir("data/localization")
+		await _scan_filesystem_and_then(func():
+			call_deferred("_refresh_workspace_list_ui")
+			call_deferred("_show_delete_success_popup")
+			_touch_parent_dir("data/localization")
+		)
 
 func _show_delete_success_popup() -> void:
 	var popup = AcceptDialog.new()
@@ -350,42 +358,52 @@ func _show_apply_translations_dialog(csv_path: String) -> void:
 
 func _on_apply_translations_confirmed(csv_path: String) -> void:
 	var workspace = csv_path.get_file().split("_")[-2]
-	status_label.text = "Applying translations for %s…"%workspace
+	status_label.text = "Applying translations for %s…" % workspace
 
-	await _scan_filesystem() # <-- Wait for filesystem to update and .translation files to be generated
+	await _scan_filesystem_and_then(func():
+		print("translation_registrar.process_translations_for(csv_path, workspace)")
 
-	if translation_registrar.process_translations_for(csv_path, workspace):
-		status_label.text = "Registered translations for %s."%workspace
-	else:
-		status_label.text = "Failed to register translations for %s."%workspace
-		return
+		if translation_registrar.process_translations_for(csv_path, workspace):
+			status_label.text = "Registered translations for %s." % workspace
+		else:
+			status_label.text = "Failed to register translations for %s." % workspace
+			return
 
-	var fs = get_editor_interface().get_resource_filesystem()
-	if enum_generator.generate_enum_for(csv_path, workspace, plugin_dir, fs):
-		status_label.text += " Enum generated."
-	else:
-		status_label.text += " Enum gen failed."
-	await _scan_filesystem()
-	_refresh_workspace_list_ui()
+		print("enum_generator.generate_enum_for(csv_path, workspace, plugin_dir, fs)")
+
+		var editor_interface = get_editor_interface()
+		if not editor_interface:
+			print("Editor interface not available!")
+			return
+		var fs = editor_interface.get_resource_filesystem()
+		if not fs:
+			print("Resource filesystem not available!")
+			return
+		if enum_generator.generate_enum_for(csv_path, workspace, plugin_dir, fs):
+			status_label.text += " Enum generated."
+		else:
+			status_label.text += " Enum gen failed."
+		_refresh_workspace_list_ui()
+	)
 
 func _set_refresh_buttons_disabled(disabled: bool) -> void:
-	for btn in refresh_buttons:
-		btn.disabled = disabled
+	for btn in refresh_buttons.duplicate():
+		if is_instance_valid(btn):
+			btn.disabled = disabled
 
-func _scan_filesystem():
-	if scan_in_progress:
-		scan_queued = true
+func _scan_filesystem_and_then(callback: Callable) -> void:
+	var editor_interface = get_editor_interface()
+	if not editor_interface:
+		print("Editor interface not available!")
 		return
-	scan_in_progress = true
-	var fs = get_editor_interface().get_resource_filesystem()
+	var fs = editor_interface.get_resource_filesystem()
+	if not fs:
+		print("Resource filesystem not available!")
+		return
+
+	# Connect the callback to the signal, one-shot so it disconnects after firing
+	fs.filesystem_changed.connect(callback, CONNECT_ONE_SHOT)
 	fs.scan()
-	await get_tree().create_timer(0.5).timeout
-	fs.scan() # Second scan to force update
-	await get_tree().create_timer(0.2).timeout
-	scan_in_progress = false
-	if scan_queued:
-		scan_queued = false
-		await _scan_filesystem()
 
 func _touch_parent_dir(path: String) -> void:
 	var dummy_path = path + "/.dummy"
